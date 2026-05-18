@@ -12,7 +12,8 @@
     rootInputNodes = nodes.root.inputs or {};
 
     autoFollowsFor = name: let
-        subInputs = (nodes.${rootInputNodes.${name} or name} or {}).inputs or {};
+        nodeRef = rootInputNodes.${name} or name;
+        subInputs = if isList nodeRef then {} else (nodes.${nodeRef} or {}).inputs or {};
     in
         pipe subInputs [
             (mapAttrs (
