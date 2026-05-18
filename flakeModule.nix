@@ -5,22 +5,11 @@
 }: let
     inherit (lib) filterAttrs mapAttrs optionalAttrs mkDefault mkOption pipe;
     inherit (lib.types) listOf str path;
-    inherit (builtins) fromJSON readFile foldl' isList length head elem attrNames;
+    inherit (builtins) fromJSON readFile isList length head elem;
 
     cfg = config.flake-follows;
     nodes = (fromJSON (readFile cfg.lockFile)).nodes;
     rootInputNodes = nodes.root.inputs or {};
-
-    nodeRev = nodeName: (nodes.${nodeName} or {}).locked.rev or null;
-
-    revToRootInput = foldl' (
-        acc: name: let
-            rev = nodeRev (rootInputNodes.${name} or name);
-        in
-            if rev != null && !(acc ? ${rev})
-            then acc // {${rev} = name;}
-            else acc
-    ) {} (attrNames rootInputNodes);
 
     autoFollowsFor = name: let
         subInputs = (nodes.${rootInputNodes.${name} or name} or {}).inputs or {};
@@ -35,12 +24,9 @@
                         if length subNodeName == 1
                         then head subNodeName
                         else null
-                    else let
-                        match = revToRootInput.${nodeRev subNodeName} or null;
-                    in
-                        if match == null || match == name
-                        then null
-                        else match
+                    else if rootInputNodes ? ${subName}
+                    then subName
+                    else null
             ))
             (filterAttrs (_: v: v != null))
         ];
