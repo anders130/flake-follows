@@ -1,4 +1,5 @@
 {
+    inputs,
     lib,
     config,
     ...
@@ -13,7 +14,10 @@
 
     autoFollowsFor = name: let
         nodeRef = rootInputNodes.${name} or name;
-        subInputs = if isList nodeRef then {} else (nodes.${nodeRef} or {}).inputs or {};
+        subInputs =
+            if isList nodeRef
+            then {}
+            else (nodes.${nodeRef} or {}).inputs or {};
     in
         pipe subInputs [
             (mapAttrs (
@@ -35,6 +39,7 @@ in {
     options.flake-follows = {
         lockFile = mkOption {
             type = path;
+            default = "${inputs.self.outPath}/flake.lock";
             description = "Path to the flake.lock file.";
         };
         exclude = mkOption {
