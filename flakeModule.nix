@@ -4,59 +4,72 @@
     config,
     ...
 }: let
-    inherit (lib) filterAttrs mapAttrs optionalAttrs mkDefault mkOption pipe;
-    inherit (lib.types) listOf str path;
-    inherit (builtins) fromJSON readFile isList length head elem;
+    inherit (lib) filterAttrs mapAttrs optionalAttrs mkDefault mkOption pipe elem;
+    inherit (lib.types) listOf str bool;
+    inherit (builtins) attrNames;
 
     cfg = config.flake-follows;
-    nodes = (fromJSON (readFile cfg.lockFile)).nodes;
-    rootInputNodes = nodes.root.inputs or {};
+    rootInputs = filterAttrs (n: _: n != "self") inputs;
 
-    autoFollowsFor = name: let
-        nodeRef = rootInputNodes.${name} or name;
-        subInputs =
-            if isList nodeRef
-            then {}
-            else (nodes.${nodeRef} or {}).inputs or {};
-    in
-        pipe subInputs [
-            (mapAttrs (
-                subName: subNodeName:
+    autoFollowsFor = name:
+        pipe (attrNames (inputs.${name}.inputs or {})) [
+            (map (subName:
+                lib.nameValuePair subName (
                     if elem "${name}.${subName}" cfg.exclude
                     then null
-                    else if isList subNodeName
-                    then
-                        if length subNodeName == 1
-                        then head subNodeName
-                        else null
-                    else if rootInputNodes ? ${subName}
+                    else if inputs ? ${subName}
                     then subName
                     else null
-            ))
+                )))
+            lib.listToAttrs
             (filterAttrs (_: v: v != null))
         ];
 in {
     options.flake-follows = {
-        lockFile = mkOption {
-            type = path;
-            default = "${inputs.self.outPath}/flake.lock";
-            description = "Path to the flake.lock file.";
-        };
         exclude = mkOption {
             type = listOf str;
             default = [];
             example = ["hyprland.nixpkgs"];
             description = "Sub-inputs to never auto-follow, in 'input.subInput' form.";
         };
+
+        autoLock = mkOption {
+            type = bool;
+            default = true;
+            description = "Run `nix flake lock` after writing flake.nix to lock any new inputs, then regenerate once if the lock changed.";
+        };
     };
 
-    config.flake-file.inputs = mapAttrs (
-        name: _: let
-            auto = autoFollowsFor name;
-        in
-            optionalAttrs (auto != {}) {
-                inputs = mapAttrs (_: target: {follows = mkDefault target;}) auto;
+    config = {
+        flake-file.inputs = mapAttrs (
+            name: _: let
+                auto = autoFollowsFor name;
+            in
+                optionalAttrs (auto != {}) {
+                    inputs = mapAttrs (_: target: {follows = mkDefault target;}) auto;
+                }
+        )
+        rootInputs;
+
+        flake-file.write-hooks = lib.mkIf cfg.autoLock [
+            {
+                index = 50;
+                program = pkgs:
+                    pkgs.writeShellApplication {
+                        name = "flake-follows-auto-lock";
+                        text = ''
+                            # Guard against re-entry from the second write-flake below.
+                            [ -n "''${FLAKE_FOLLOWS_REGEN:-}" ] && exit 0
+
+                            # Fast path: if the lock already covers all inputs, nothing to do.
+                            nix flake lock --no-update-lock-file 2>/dev/null && exit 0
+
+                            export FLAKE_FOLLOWS_REGEN=1
+                            nix flake lock
+                            nix run .#write-flake
+                        '';
+                    };
             }
-    )
-    rootInputNodes;
+        ];
+    };
 }
