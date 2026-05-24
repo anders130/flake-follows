@@ -51,6 +51,11 @@ in {
         )
         rootInputs;
 
+        # Removed inputs linger in `inputs` from the old flake.nix; drop their orphaned follows.
+        flake-file.preProcess = mkDefault (
+            filterAttrs (_: v: v ? url || v ? follows)
+        );
+
         flake-file.write-hooks = lib.mkIf cfg.autoLock [
             {
                 index = 50;
