@@ -10,12 +10,13 @@
 
     cfg = config.flake-follows;
     rootInputs = filterAttrs (n: _: n != "self") inputs;
+    exclude = map (lib.replaceStrings ["/"] ["."]) cfg.exclude;
 
     autoFollowsFor = name:
         pipe (attrNames (inputs.${name}.inputs or {})) [
             (map (subName:
                 lib.nameValuePair subName (
-                    if elem "${name}.${subName}" cfg.exclude
+                    if elem "${name}.${subName}" exclude
                     then null
                     else if inputs ? ${subName}
                     then subName
@@ -29,8 +30,8 @@ in {
         exclude = mkOption {
             type = listOf str;
             default = [];
-            example = ["hyprland.nixpkgs"];
-            description = "Sub-inputs to never auto-follow, in 'input.subInput' form.";
+            example = ["hyprland/nixpkgs"];
+            description = "Sub-inputs to never auto-follow, in 'input/subInput' or 'input.subInput' form.";
         };
 
         autoLock = mkOption {

@@ -27,12 +27,12 @@ Run `nix run .#write-flake` to regenerate `flake.nix` with the follows applied.
 
 ### `flake-follows.exclude`
 
-Sub-inputs to skip, in `"input.subInput"` form.
+Sub-inputs to skip, in `"input/subInput"` form.
 
 ```nix
 flake-follows.exclude = [
-  "hyprland.nixpkgs"
-  "caelestia-shell.nixpkgs"
+  "hyprland/nixpkgs"
+  "caelestia-shell/nixpkgs"
 ];
 ```
 
